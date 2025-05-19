@@ -14,11 +14,14 @@ app.use(express.json());
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const FEEDS = [
-  "https://news.google.com/rss/search?q=women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
-  "https://hypebae.com/feed",
-  "https://www.highsnobiety.com/feed/"
+  "https://news.google.com/rss/search?q=Nike+women&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=Jordan+women&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=Adidas+women&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=Hoka+women&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=New+Balance+women&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=Asics+women&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=On+Running+women&hl=en-US&gl=US&ceid=US:en"
 ];
-
 
 async function generateBlogPost(item) {
   const content = item["content:encoded"] || item.content || "";
@@ -37,7 +40,7 @@ Summary: ${item.contentSnippet}`;
   return {
     title: item.title,
     content: completion.choices[0].message.content,
-    image: imageMatch ? imageMatch[1] : "https://via.placeholder.com/600x400?text=Sneakers"
+    image: imageMatch ? imageMatch[1] : "https://source.unsplash.com/600x400/?sneakers"
   };
 }
 
@@ -73,10 +76,15 @@ async function fetchAndPublish() {
 
 app.get("/api/fetch-sneaker-news", async (req, res) => {
   try {
-    const feed = await parser.parseURL(FEEDS[0]);
-    const top = feed.items.filter(i => i.title.toLowerCase().includes("women")).slice(0, 3);
-    const rewritten = await Promise.all(top.map(generateBlogPost));
-    res.json({ posts: rewritten });
+    for (const feedURL of FEEDS) {
+      const feed = await parser.parseURL(feedURL);
+      const items = feed.items.filter(i => i.title.toLowerCase().includes("women")).slice(0, 2);
+      if (items.length) {
+        const rewritten = await Promise.all(items.map(generateBlogPost));
+        return res.json({ posts: rewritten });
+      }
+    }
+    res.json({ posts: [] });
   } catch (err) {
     console.error("❌ Error in /api/fetch-sneaker-news:", err);
     res.status(500).json({ error: "Failed to fetch news." });
