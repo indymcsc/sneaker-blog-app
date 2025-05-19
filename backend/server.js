@@ -1,9 +1,8 @@
-
 // server.js
 const express = require("express");
 const fetch = require("node-fetch");
 const RSSParser = require("rss-parser");
-const { Configuration, OpenAIApi } = require("openai");
+const OpenAI = require("openai");
 const { Shopify } = require("@shopify/shopify-api");
 const cors = require("cors");
 
@@ -12,7 +11,9 @@ const parser = new RSSParser();
 app.use(cors());
 app.use(express.json());
 
-const openai = new OpenAIApi(new Configuration({ apiKey: process.env.OPENAI_API_KEY }));
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // Helper: Generate Blog Post
 async function generateBlogPost(item) {
@@ -22,7 +23,7 @@ async function generateBlogPost(item) {
 Title: ${item.title}
 Summary: ${item.contentSnippet}`;
 
-  const completion = await openai.createChatCompletion({
+  const completion = await openai.chat.completions.create({
     model: "gpt-4",
     messages: [{ role: "user", content: prompt }],
     max_tokens: 500,
@@ -30,8 +31,8 @@ Summary: ${item.contentSnippet}`;
 
   return {
     title: item.title,
-    content: completion.data.choices[0].message.content,
-    image: imageMatch ? imageMatch[1] : "https://via.placeholder.com/600x400?text=Sneakers"
+    content: completion.choices[0].message.content,
+    image: imageMatch ? imageMatch[1] : "https://via.placeholder.com/600x400?text=Sneakers",
   };
 }
 
