@@ -1,3 +1,4 @@
+
 // server.js
 const express = require("express");
 const fetch = require("node-fetch");
@@ -38,7 +39,7 @@ Summary: ${item.contentSnippet}`;
 
 // 🔁 Exportable for cron.js
 async function fetchAndPublish() {
-  const feed = await parser.parseURL("https://sneakernews.com/category/womens/feed/");
+  const feed = await parser.parseURL("https://sneakernews.com/feed/");
   const top = feed.items.slice(0, 1);
   const item = top[0];
   const post = await generateBlogPost(item);
@@ -62,7 +63,7 @@ async function fetchAndPublish() {
 
 // 🛠 Manual fetch route for UI
 app.get("/api/fetch-sneaker-news", async (req, res) => {
-  const feed = await parser.parseURL("https://sneakernews.com/category/womens/feed/");
+  const feed = await parser.parseURL("https://sneakernews.com/feed/");
   const top = feed.items.slice(0, 3);
 
   const rewritten = await Promise.all(top.map(generateBlogPost));
