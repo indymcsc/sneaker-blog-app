@@ -1,3 +1,4 @@
+
 const express = require("express");
 const fetch = require("node-fetch");
 const RSSParser = require("rss-parser");
@@ -16,24 +17,30 @@ const openai = new OpenAI({
 
 // Helper: Generate Blog Post
 async function generateBlogPost(item) {
-  const content = item["content:encoded"] || item.content || "";
-  const imageMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
-  const prompt = `Write a short, stylish blog post in Lilac Blonde's tone about this sneaker headline and summary.
+  try {
+    const content = item["content:encoded"] || item.content || "";
+    const imageMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+
+    const prompt = `Write a short, stylish blog post in Lilac Blonde's tone about this sneaker headline and summary.
 
 Title: ${item.title}
 Summary: ${item.contentSnippet}`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4",
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 500,
-  });
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 500,
+    });
 
-  return {
-    title: item.title,
-    content: completion.choices[0].message.content,
-    image: imageMatch ? imageMatch[1] : "https://via.placeholder.com/600x400?text=Sneakers",
-  };
+    return {
+      title: item.title,
+      content: completion.choices[0].message.content,
+      image: imageMatch ? imageMatch[1] : "https://via.placeholder.com/600x400?text=Sneakers",
+    };
+  } catch (error) {
+    console.error("❌ Error in generateBlogPost:", error);
+    throw new Error("Failed to generate blog post");
+  }
 }
 
 // 🔁 Exportable for cron.js
@@ -94,7 +101,7 @@ app.post("/api/publish-blog-post", async (req, res) => {
 
     res.json({ message: "Blog post published to Shopify. Now import it into Bloggle." });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Error in /api/publish-blog-post:", err);
     res.status(500).json({ error: "Failed to publish blog post." });
   }
 });
