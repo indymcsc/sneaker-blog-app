@@ -16,8 +16,11 @@ const openai = new OpenAIApi(new Configuration({ apiKey: process.env.OPENAI_API_
 
 // Helper: Generate Blog Post
 async function generateBlogPost(item) {
-  const imageMatch = item.content.match(/<img[^>]+src=\"([^\"]+)\"/);
-  const prompt = \`Write a short, stylish blog post in Lilac Blonde's tone about this sneaker headline and summary.\n\nTitle: \${item.title}\nSummary: \${item.contentSnippet}\`;
+  const imageMatch = item.content.match(/<img[^>]+src="([^"]+)"/);
+  const prompt = `Write a short, stylish blog post in Lilac Blonde's tone about this sneaker headline and summary.
+
+Title: ${item.title}
+Summary: ${item.contentSnippet}`;
 
   const completion = await openai.createChatCompletion({
     model: "gpt-4",
@@ -47,7 +50,7 @@ async function fetchAndPublish() {
     data: {
       article: {
         title: post.title,
-        body_html: \`<div><img src='\${post.image}' alt='Sneaker'/><p>\${post.content}</p></div>\`,
+        body_html: `<div><img src='${post.image}' alt='Sneaker'/><p>${post.content}</p></div>`,
         tags: "sneakers, women, lilac blonde, news",
         published: true
       }
@@ -77,7 +80,7 @@ app.post("/api/publish-blog-post", async (req, res) => {
       data: {
         article: {
           title,
-          body_html: \`<div><img src='\${image}' alt='Sneaker'/><p>\${content}</p></div>\`,
+          body_html: `<div><img src='${image}' alt='Sneaker'/><p>${content}</p></div>`,
           tags: "sneakers, women, lilac blonde, news",
           published: true
         }
@@ -94,7 +97,7 @@ app.post("/api/publish-blog-post", async (req, res) => {
 
 // Run server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(\`🚀 Server listening on port \${PORT}\`));
+app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
 
 // Export for cron
 module.exports = { fetchAndPublish };
