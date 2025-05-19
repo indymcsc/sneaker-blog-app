@@ -1,7 +1,9 @@
+
 const express = require("express");
 const fetch = require("node-fetch");
 const RSSParser = require("rss-parser");
 const OpenAI = require("openai");
+const cheerio = require("cheerio");
 const { Shopify } = require("@shopify/shopify-api");
 const cors = require("cors");
 const cron = require("node-cron");
@@ -14,34 +16,33 @@ app.use(express.json());
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const FEEDS = [
-  "https://news.google.com/rss/search?q=nike+OR+jordan+OR+adidas+OR+hoka+OR+asics+OR+%22on+running%22+OR+%22new+balance%22+women&hl=en-US&gl=US&ceid=US:en",
-  "https://hypebae.com/feed"
+  "https://news.google.com/rss/search?q=nike+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=adidas+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=new+balance+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=asics+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=hoka+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=on+running+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en"
 ];
 
+async function extractOGImage(url) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0"
+      }
+    });
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const ogImage = $('meta[property="og:image"]').attr("content");
+    return ogImage || null;
+  } catch (err) {
+    console.error("⚠️ Failed to fetch OG image from", url, err.message);
+    return null;
+  }
+}
+
 async function generateBlogPost(item) {
-  const content = item["content:encoded"] || item.content || "";
-
-  let imageUrl = null;
-
-  // 1. Try parsing <img> tag
-  const imageMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (imageMatch) {
-    imageUrl = imageMatch[1];
-  }
-
-  // 2. Try enclosure or media:content
-  if (!imageUrl && item.enclosure && item.enclosure.url) {
-    imageUrl = item.enclosure.url;
-  }
-  if (!imageUrl && item["media:content"] && item["media:content"]["$"]?.url) {
-    imageUrl = item["media:content"]["$"].url;
-  }
-
-  // 3. Fallback placeholder
-  if (!imageUrl) {
-    imageUrl = "https://via.placeholder.com/600x400?text=Sneakers";
-  }
-
+  const image = await extractOGImage(item.link);
   const prompt = `Write a 500 word, stylish blog post for Lilac Blonde's in the tone of complex.com about this sneaker article.
 
 Article title: ${item.title}
@@ -56,7 +57,7 @@ Summary: ${item.contentSnippet}`;
   return {
     title: item.title,
     content: completion.choices[0].message.content,
-    image: imageUrl
+    image: image || "https://via.placeholder.com/600x400?text=Sneakers"
   };
 }
 
