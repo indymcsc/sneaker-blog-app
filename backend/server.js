@@ -17,30 +17,24 @@ const openai = new OpenAI({
 
 // Helper: Generate Blog Post
 async function generateBlogPost(item) {
-  try {
-    const content = item["content:encoded"] || item.content || "";
-    const imageMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
-
-    const prompt = `Write a short, stylish blog post in Lilac Blonde's tone about this sneaker headline and summary.
+  const content = item["content:encoded"] || item.content || "";
+  const imageMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+  const prompt = `Write a short, stylish blog post in Lilac Blonde's tone about this sneaker headline and summary.
 
 Title: ${item.title}
 Summary: ${item.contentSnippet}`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 500,
-    });
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4",
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: 500,
+  });
 
-    return {
-      title: item.title,
-      content: completion.choices[0].message.content,
-      image: imageMatch ? imageMatch[1] : "https://via.placeholder.com/600x400?text=Sneakers",
-    };
-  } catch (error) {
-    console.error("❌ Error in generateBlogPost:", error);
-    throw new Error("Failed to generate blog post");
-  }
+  return {
+    title: item.title,
+    content: completion.choices[0].message.content,
+    image: imageMatch ? imageMatch[1] : "https://via.placeholder.com/600x400?text=Sneakers",
+  };
 }
 
 // 🔁 Exportable for cron.js
@@ -50,12 +44,10 @@ async function fetchAndPublish() {
   const post = await generateBlogPost(item);
 
   const session = await Shopify.Utils.loadOfflineSession("lilacblonde.myshopify.com");
-  const client = new Shopify.Clients.Rest(session.shop, session.accessToken);
-
-  await client.post({
-    path: "blogs/79027699861/articles",
+  await Shopify.Clients.Rest(session).post({
+    path: "blog_posts",
     data: {
-      article: {
+      blog_post: {
         title: post.title,
         body_html: `<div><img src='${post.image}' alt='Sneaker'/><p>${post.content}</p></div>`,
         tags: "sneakers, women, lilac blonde, news",
@@ -66,7 +58,6 @@ async function fetchAndPublish() {
   });
 }
 
-// 🛠 Manual fetch route for UI
 app.get("/api/fetch-sneaker-news", async (req, res) => {
   try {
     const feed = await parser.parseURL("https://sneakernews.com/category/womens/feed/");
@@ -74,22 +65,22 @@ app.get("/api/fetch-sneaker-news", async (req, res) => {
     const rewritten = await Promise.all(top.map(generateBlogPost));
     res.json({ posts: rewritten });
   } catch (err) {
-    console.error("❌ Error in /api/fetch-sneaker-news:", err);
+    console.error("❌ Error in /api/fetch-sneaker-news:");
+    console.error(err?.response?.status);
+    console.error(err?.response?.data || err.message || err);
     res.status(500).json({ error: "Invalid response format" });
   }
 });
 
-// 🛠 Manual publish route
 app.post("/api/publish-blog-post", async (req, res) => {
   const { title, content, image } = req.body;
+
   try {
     const session = await Shopify.Utils.loadOfflineSession("lilacblonde.myshopify.com");
-    const client = new Shopify.Clients.Rest(session.shop, session.accessToken);
-
-    await client.post({
-      path: "blogs/79027699861/articles",
+    await Shopify.Clients.Rest(session).post({
+      path: "blog_posts",
       data: {
-        article: {
+        blog_post: {
           title,
           body_html: `<div><img src='${image}' alt='Sneaker'/><p>${content}</p></div>`,
           tags: "sneakers, women, lilac blonde, news",
@@ -101,14 +92,15 @@ app.post("/api/publish-blog-post", async (req, res) => {
 
     res.json({ message: "Blog post published to Shopify. Now import it into Bloggle." });
   } catch (err) {
-    console.error("❌ Error in /api/publish-blog-post:", err);
+    console.error("❌ Error in /api/publish-blog-post:");
+    console.error(err?.response?.status);
+    console.error(err?.response?.data || err.message || err);
     res.status(500).json({ error: "Failed to publish blog post." });
   }
 });
 
-// Run server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
-
-// Export for cron
-module.exports = { fetchAndPublish };
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log("==> Your service is live 🎉");
+});
