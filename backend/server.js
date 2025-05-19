@@ -3,10 +3,10 @@ const express = require("express");
 const fetch = require("node-fetch");
 const RSSParser = require("rss-parser");
 const OpenAI = require("openai");
-const cheerio = require("cheerio");
 const { Shopify } = require("@shopify/shopify-api");
 const cors = require("cors");
 const cron = require("node-cron");
+const cheerio = require("cheerio");
 
 const app = express();
 const parser = new RSSParser();
@@ -16,33 +16,23 @@ app.use(express.json());
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const FEEDS = [
-  "https://news.google.com/rss/search?q=nike+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=adidas+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=new+balance+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=asics+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=hoka+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=on+running+women%27s+sneakers&hl=en-US&gl=US&ceid=US:en"
+  "https://news.google.com/rss/search?q=nike+OR+jordan+OR+adidas+OR+hoka+OR+new+balance+OR+asics+OR+on+running+women's+sneakers&hl=en-US&gl=US&ceid=US:en"
 ];
 
-async function extractOGImage(url) {
+async function fetchOGImage(url) {
   try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0"
-      }
-    });
-    const html = await response.text();
+    const res = await fetch(url);
+    const html = await res.text();
     const $ = cheerio.load(html);
     const ogImage = $('meta[property="og:image"]').attr("content");
     return ogImage || null;
-  } catch (err) {
-    console.error("⚠️ Failed to fetch OG image from", url, err.message);
+  } catch (e) {
+    console.error("OG image fetch error:", e.message);
     return null;
   }
 }
 
 async function generateBlogPost(item) {
-  const image = await extractOGImage(item.link);
   const prompt = `Write a 500 word, stylish blog post for Lilac Blonde's in the tone of complex.com about this sneaker article.
 
 Article title: ${item.title}
@@ -54,10 +44,11 @@ Summary: ${item.contentSnippet}`;
     max_tokens: 750,
   });
 
+  const ogImage = await fetchOGImage(item.link);
   return {
     title: item.title,
     content: completion.choices[0].message.content,
-    image: image || "https://via.placeholder.com/600x400?text=Sneakers"
+    image: ogImage || "https://via.placeholder.com/600x400?text=Sneakers"
   };
 }
 
