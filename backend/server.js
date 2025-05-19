@@ -14,18 +14,34 @@ app.use(express.json());
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const FEEDS = [
-  "https://news.google.com/rss/search?q=Nike+women&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=Jordan+women&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=Adidas+women&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=Hoka+women&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=New+Balance+women&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=Asics+women&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=On+Running+women&hl=en-US&gl=US&ceid=US:en"
+  "https://news.google.com/rss/search?q=nike+OR+jordan+OR+adidas+OR+hoka+OR+asics+OR+%22on+running%22+OR+%22new+balance%22+women&hl=en-US&gl=US&ceid=US:en",
+  "https://hypebae.com/feed"
 ];
 
 async function generateBlogPost(item) {
   const content = item["content:encoded"] || item.content || "";
+
+  let imageUrl = null;
+
+  // 1. Try parsing <img> tag
   const imageMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (imageMatch) {
+    imageUrl = imageMatch[1];
+  }
+
+  // 2. Try enclosure or media:content
+  if (!imageUrl && item.enclosure && item.enclosure.url) {
+    imageUrl = item.enclosure.url;
+  }
+  if (!imageUrl && item["media:content"] && item["media:content"]["$"]?.url) {
+    imageUrl = item["media:content"]["$"].url;
+  }
+
+  // 3. Fallback placeholder
+  if (!imageUrl) {
+    imageUrl = "https://via.placeholder.com/600x400?text=Sneakers";
+  }
+
   const prompt = `Write a 500 word, stylish blog post for Lilac Blonde's in the tone of complex.com about this sneaker article.
 
 Article title: ${item.title}
@@ -40,7 +56,7 @@ Summary: ${item.contentSnippet}`;
   return {
     title: item.title,
     content: completion.choices[0].message.content,
-    image: imageMatch ? imageMatch[1] : "https://source.unsplash.com/600x400/?sneakers"
+    image: imageUrl
   };
 }
 
@@ -76,15 +92,10 @@ async function fetchAndPublish() {
 
 app.get("/api/fetch-sneaker-news", async (req, res) => {
   try {
-    for (const feedURL of FEEDS) {
-      const feed = await parser.parseURL(feedURL);
-      const items = feed.items.filter(i => i.title.toLowerCase().includes("women")).slice(0, 2);
-      if (items.length) {
-        const rewritten = await Promise.all(items.map(generateBlogPost));
-        return res.json({ posts: rewritten });
-      }
-    }
-    res.json({ posts: [] });
+    const feed = await parser.parseURL(FEEDS[0]);
+    const top = feed.items.filter(i => i.title.toLowerCase().includes("women")).slice(0, 3);
+    const rewritten = await Promise.all(top.map(generateBlogPost));
+    res.json({ posts: rewritten });
   } catch (err) {
     console.error("❌ Error in /api/fetch-sneaker-news:", err);
     res.status(500).json({ error: "Failed to fetch news." });
