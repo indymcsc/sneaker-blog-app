@@ -1,7 +1,7 @@
 const express = require("express");
 const fetch = require("node-fetch");
 const RSSParser = require("rss-parser");
-const { OpenAI } = require("openai");
+const { OpenAIApi, Configuration } = require("openai");
 const { Shopify } = require("@shopify/shopify-api");
 const cors = require("cors");
 
@@ -10,19 +10,20 @@ const parser = new RSSParser();
 app.use(cors());
 app.use(express.json());
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAIApi(
+  new Configuration({ apiKey: process.env.OPENAI_API_KEY })
+);
 
 // Helper: Generate Blog Post
 async function generateBlogPost(item) {
   const content = item["content:encoded"] || item.content || "";
-  const imageMatch = content.match(/<img[^>]+src="([^"]+)"/i);
-
+  const imageMatch = content.match(/<img[^>]+src=["']([^"']+)["']/);
   const prompt = `Write a short, stylish blog post in Lilac Blonde's tone about this sneaker headline and summary.
 
 Title: ${item.title}
 Summary: ${item.contentSnippet}`;
 
-  const completion = await openai.chat.completions.create({
+  const completion = await openai.createChatCompletion({
     model: "gpt-4",
     messages: [{ role: "user", content: prompt }],
     max_tokens: 500,
@@ -30,7 +31,7 @@ Summary: ${item.contentSnippet}`;
 
   return {
     title: item.title,
-    content: completion.choices[0].message.content,
+    content: completion.data.choices[0].message.content,
     image: imageMatch ? imageMatch[1] : "https://via.placeholder.com/600x400?text=Sneakers"
   };
 }
@@ -67,8 +68,8 @@ app.get("/api/fetch-sneaker-news", async (req, res) => {
     const rewritten = await Promise.all(top.map(generateBlogPost));
     res.json({ posts: rewritten });
   } catch (err) {
-    console.error("Error fetching sneaker news:", err);
-    res.status(500).json({ error: "Failed to fetch sneaker news" });
+    console.error("❌ Error in /api/fetch-sneaker-news:", err);
+    res.status(500).json({ error: "Invalid response format" });
   }
 });
 
@@ -94,7 +95,7 @@ app.post("/api/publish-blog-post", async (req, res) => {
 
     res.json({ message: "Blog post published to Shopify. Now import it into Bloggle." });
   } catch (err) {
-    console.error("Publish error:", err);
+    console.error(err);
     res.status(500).json({ error: "Failed to publish blog post." });
   }
 });
