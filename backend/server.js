@@ -77,7 +77,7 @@ app.post("/api/publish-blog-post", async (req, res) => {
     const session = await Shopify.Utils.loadOfflineSession("lilacblonde.myshopify.com");
     const client = new Shopify.Clients.Rest(session.shop, session.accessToken);
 
-    await client.post({
+    const response = await client.post({
       path: "blogs/79027699861/articles",
       data: {
         article: {
@@ -90,9 +90,11 @@ app.post("/api/publish-blog-post", async (req, res) => {
       type: Shopify.Clients.Rest.DataType.JSON
     });
 
-    res.json({ message: "Blog post published to Shopify. Now import it into Bloggle." });
+    console.log("✅ Shopify published response:", response?.body?.article);
+    res.json({ message: "✅ Blog post published!", article: response?.body?.article });
+
   } catch (err) {
-    console.error(err);
+    console.error("❌ Failed to publish blog post:", err?.response?.body || err);
     res.status(500).json({ error: "Failed to publish blog post." });
   }
 });
