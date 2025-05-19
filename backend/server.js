@@ -6,7 +6,6 @@ const OpenAI = require("openai");
 const { Shopify } = require("@shopify/shopify-api");
 const cors = require("cors");
 const cron = require("node-cron");
-const cheerio = require("cheerio");
 
 const app = express();
 const parser = new RSSParser();
@@ -16,15 +15,18 @@ app.use(express.json());
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const FEEDS = [
-  "https://news.google.com/rss/search?q=women%27s+sneakers&hl=en-US&gl=US&ceid=US:en"
+  "https://sneakernews.com/category/womens/feed/",
+  "https://news.google.com/rss/search?q=women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
+  "https://hypebae.com/feed"
 ];
+
+function isNotSaleArticle(title) {
+  return !/(sale|%|off|deal|\$|discount)/i.test(title);
+}
 
 async function generateBlogPost(item) {
   const content = item["content:encoded"] || item.content || "";
-  const $ = cheerio.load(content);
-  const firstImg = $("img").first().attr("src");
-  const image = firstImg || "https://via.placeholder.com/600x400?text=Sneakers";
-
+  const imageMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
   const prompt = `Write a 500 word, stylish blog post for Lilac Blonde's in the tone of complex.com about this sneaker article.
 
 Article title: ${item.title}
@@ -38,8 +40,8 @@ Summary: ${item.contentSnippet}`;
 
   return {
     title: item.title,
-    content: completion.choices[0].message.content,
-    image
+    content: completion.choices[0].message.content + `<p><a href="${item.link}" target="_blank">See full article</a></p>`,
+    image: imageMatch ? imageMatch[1] : "https://via.placeholder.com/600x400?text=Sneakers"
   };
 }
 
@@ -47,14 +49,8 @@ async function fetchAndPublish() {
   try {
     for (const feedURL of FEEDS) {
       const feed = await parser.parseURL(feedURL);
-      let item = feed.items.find(i =>
-        i.title.toLowerCase().includes("women") ||
-        i.title.toLowerCase().includes("sneaker") ||
-        i.contentSnippet?.toLowerCase().includes("nike") ||
-        i.contentSnippet?.toLowerCase().includes("adidas") ||
-        i.contentSnippet?.toLowerCase().includes("new balance")
-      );
-      if (!item) item = feed.items[0];
+      const item = feed.items.find(i => i.title.toLowerCase().includes("women") && isNotSaleArticle(i.title));
+      if (!item) continue;
       const post = await generateBlogPost(item);
 
       const session = await Shopify.Utils.loadOfflineSession("lilacblonde.myshopify.com");
@@ -72,7 +68,6 @@ async function fetchAndPublish() {
         },
         type: Shopify.Clients.Rest.DataType.JSON
       });
-
       break;
     }
   } catch (err) {
@@ -87,16 +82,9 @@ app.get("/", (req, res) => {
 app.get("/api/fetch-sneaker-news", async (req, res) => {
   try {
     const feed = await parser.parseURL(FEEDS[0]);
-
-    let top = feed.items.filter(i =>
-      i.title.toLowerCase().includes("women") ||
-      i.title.toLowerCase().includes("sneaker") ||
-      i.contentSnippet?.toLowerCase().includes("nike") ||
-      i.contentSnippet?.toLowerCase().includes("adidas") ||
-      i.contentSnippet?.toLowerCase().includes("new balance")
-    );
-
-    if (top.length === 0) top = feed.items.slice(0, 3);
+    const top = feed.items
+      .filter(i => i.title.toLowerCase().includes("women") && isNotSaleArticle(i.title))
+      .slice(0, 3);
     const rewritten = await Promise.all(top.map(generateBlogPost));
     res.json({ posts: rewritten });
   } catch (err) {
