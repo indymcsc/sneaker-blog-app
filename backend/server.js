@@ -16,7 +16,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const FEEDS = [
   "https://sneakernews.com/category/womens/feed/",
   "https://news.google.com/rss/search?q=women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
-  "https://www.nicekicks.com/category/womens/feed/"
+  "https://hypebae.com/feed"
 ];
 
 async function generateBlogPost(item) {
@@ -63,7 +63,7 @@ async function fetchAndPublish() {
         },
         type: Shopify.Clients.Rest.DataType.JSON
       });
-      break; // publish one per run
+      break;
     }
   } catch (err) {
     console.error("❌ Error in fetchAndPublish:", err);
@@ -108,8 +108,7 @@ app.post("/api/publish-blog-post", async (req, res) => {
   }
 });
 
-// Scheduled runs
-cron.schedule("0 7 * * *", fetchAndPublish); // Daily at 7 AM
+cron.schedule("0 7 * * *", fetchAndPublish);
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
