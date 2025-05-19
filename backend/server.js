@@ -5,7 +5,6 @@ const RSSParser = require("rss-parser");
 const OpenAI = require("openai");
 const { Shopify } = require("@shopify/shopify-api");
 const cors = require("cors");
-const cron = require("node-cron");
 const cheerio = require("cheerio");
 
 const app = express();
@@ -16,18 +15,39 @@ app.use(express.json());
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const FEEDS = [
-  "https://news.google.com/rss/search?q=nike+OR+jordan+OR+adidas+OR+hoka+OR+new+balance+OR+asics+OR+on+running+women's+sneakers&hl=en-US&gl=US&ceid=US:en"
+  "https://news.google.com/rss/search?q=nike+women+shoes&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=adidas+women+shoes&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=new+balance+women+shoes&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=hoka+women+shoes&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=asics+women+shoes&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=on+running+women+shoes&hl=en-US&gl=US&ceid=US:en"
 ];
 
-async function fetchOGImage(url) {
+const fallbackImages = {
+  nike: "https://logo.clearbit.com/nike.com",
+  adidas: "https://logo.clearbit.com/adidas.com",
+  hoka: "https://logo.clearbit.com/hoka.com",
+  "new balance": "https://logo.clearbit.com/newbalance.com",
+  asics: "https://logo.clearbit.com/asics.com",
+  on: "https://logo.clearbit.com/on-running.com"
+};
+
+function getFallbackImage(title) {
+  const lower = title.toLowerCase();
+  for (const brand in fallbackImages) {
+    if (lower.includes(brand)) return fallbackImages[brand];
+  }
+  return "https://upload.wikimedia.org/wikipedia/commons/0/0b/Google_News_icon.svg";
+}
+
+async function fetchOgImage(url) {
   try {
-    const res = await fetch(url);
-    const html = await res.text();
+    const response = await fetch(url);
+    const html = await response.text();
     const $ = cheerio.load(html);
     const ogImage = $('meta[property="og:image"]').attr("content");
     return ogImage || null;
-  } catch (e) {
-    console.error("OG image fetch error:", e.message);
+  } catch (err) {
     return null;
   }
 }
@@ -44,83 +64,32 @@ Summary: ${item.contentSnippet}`;
     max_tokens: 750,
   });
 
-  const ogImage = await fetchOGImage(item.link);
+  const image = (await fetchOgImage(item.link)) || getFallbackImage(item.title);
+
   return {
     title: item.title,
     content: completion.choices[0].message.content,
-    image: ogImage || "https://via.placeholder.com/600x400?text=Sneakers"
+    image
   };
-}
-
-async function fetchAndPublish() {
-  try {
-    for (const feedURL of FEEDS) {
-      const feed = await parser.parseURL(feedURL);
-      const item = feed.items.find(i => i.title.toLowerCase().includes("women"));
-      if (!item) continue;
-      const post = await generateBlogPost(item);
-
-      const session = await Shopify.Utils.loadOfflineSession("lilacblonde.myshopify.com");
-      const client = new Shopify.Clients.Rest(session.shop, session.accessToken);
-
-      await client.post({
-        path: "blogs/79027699861/articles",
-        data: {
-          article: {
-            title: post.title,
-            body_html: `<div><img src='${post.image}' alt='Sneaker'/><p>${post.content}</p></div>`,
-            tags: "sneakers, women, lilac blonde, news",
-            published: true
-          }
-        },
-        type: Shopify.Clients.Rest.DataType.JSON
-      });
-      break;
-    }
-  } catch (err) {
-    console.error("❌ Error in fetchAndPublish:", err);
-  }
 }
 
 app.get("/api/fetch-sneaker-news", async (req, res) => {
   try {
-    const feed = await parser.parseURL(FEEDS[0]);
-    const top = feed.items.filter(i => i.title.toLowerCase().includes("women")).slice(0, 3);
-    const rewritten = await Promise.all(top.map(generateBlogPost));
-    res.json({ posts: rewritten });
+    const results = [];
+    for (const feedURL of FEEDS) {
+      const feed = await parser.parseURL(feedURL);
+      const item = feed.items.find(i => i.title.toLowerCase().includes("women"));
+      if (item) {
+        const post = await generateBlogPost(item);
+        results.push(post);
+      }
+    }
+    res.json({ posts: results });
   } catch (err) {
     console.error("❌ Error in /api/fetch-sneaker-news:", err);
     res.status(500).json({ error: "Failed to fetch news." });
   }
 });
-
-app.post("/api/publish-blog-post", async (req, res) => {
-  const { title, content, image } = req.body;
-  try {
-    const session = await Shopify.Utils.loadOfflineSession("lilacblonde.myshopify.com");
-    const client = new Shopify.Clients.Rest(session.shop, session.accessToken);
-
-    await client.post({
-      path: "blogs/79027699861/articles",
-      data: {
-        article: {
-          title,
-          body_html: `<div><img src='${image}' alt='Sneaker'/><p>${content}</p></div>`,
-          tags: "sneakers, women, lilac blonde, news",
-          published: true
-        }
-      },
-      type: Shopify.Clients.Rest.DataType.JSON
-    });
-
-    res.json({ message: "Blog post published to Shopify. Now import it into Bloggle." });
-  } catch (err) {
-    console.error("❌ Error in /api/publish-blog-post:", err);
-    res.status(500).json({ error: "Failed to publish blog post." });
-  }
-});
-
-cron.schedule("0 7 * * *", fetchAndPublish);
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
