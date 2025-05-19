@@ -14,10 +14,11 @@ app.use(express.json());
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const FEEDS = [
-  "https://sneakernews.com/category/womens/feed/",
   "https://news.google.com/rss/search?q=women%27s+sneakers&hl=en-US&gl=US&ceid=US:en",
-  "https://hypebae.com/feed"
+  "https://hypebae.com/feed",
+  "https://www.highsnobiety.com/feed/"
 ];
+
 
 async function generateBlogPost(item) {
   const content = item["content:encoded"] || item.content || "";
