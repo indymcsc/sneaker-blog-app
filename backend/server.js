@@ -19,6 +19,7 @@ const openai = new OpenAI({
 async function generateBlogPost(item) {
   const content = item["content:encoded"] || item.content || "";
   const imageMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+
   const prompt = `Write a short, stylish blog post in Lilac Blonde's tone about this sneaker headline and summary.
 
 Title: ${item.title}
@@ -37,30 +38,10 @@ Summary: ${item.contentSnippet}`;
   };
 }
 
-// 🔁 Exportable for cron.js
-async function fetchAndPublish() {
-  const feed = await parser.parseURL("https://sneakernews.com/category/womens/feed/");
-  const item = feed.items[0];
-  const post = await generateBlogPost(item);
-
-  const session = await Shopify.Utils.loadOfflineSession("lilacblonde.myshopify.com");
-  await Shopify.Clients.Rest(session).post({
-    path: "blog_posts",
-    data: {
-      blog_post: {
-        title: post.title,
-        body_html: `<div><img src='${post.image}' alt='Sneaker'/><p>${post.content}</p></div>`,
-        tags: "sneakers, women, lilac blonde, news",
-        published: true,
-      },
-    },
-    type: Shopify.Clients.Rest.DataType.JSON,
-  });
-}
-
+// Endpoint to fetch sneaker news and return rewritten posts
 app.get("/api/fetch-sneaker-news", async (req, res) => {
   try {
-    const feed = await parser.parseURL("https://sneakernews.com/category/womens/feed/");
+    const feed = await parser.parseURL("https://news.google.com/rss/search?q=women%27s+sneakers");
     const top = feed.items.slice(0, 3);
     const rewritten = await Promise.all(top.map(generateBlogPost));
     res.json({ posts: rewritten });
@@ -72,35 +53,10 @@ app.get("/api/fetch-sneaker-news", async (req, res) => {
   }
 });
 
-app.post("/api/publish-blog-post", async (req, res) => {
-  const { title, content, image } = req.body;
-
-  try {
-    const session = await Shopify.Utils.loadOfflineSession("lilacblonde.myshopify.com");
-    await Shopify.Clients.Rest(session).post({
-      path: "blog_posts",
-      data: {
-        blog_post: {
-          title,
-          body_html: `<div><img src='${image}' alt='Sneaker'/><p>${content}</p></div>`,
-          tags: "sneakers, women, lilac blonde, news",
-          published: true,
-        },
-      },
-      type: Shopify.Clients.Rest.DataType.JSON,
-    });
-
-    res.json({ message: "Blog post published to Shopify. Now import it into Bloggle." });
-  } catch (err) {
-    console.error("❌ Error in /api/publish-blog-post:");
-    console.error(err?.response?.status);
-    console.error(err?.response?.data || err.message || err);
-    res.status(500).json({ error: "Failed to publish blog post." });
-  }
-});
-
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
+module.exports = {};
